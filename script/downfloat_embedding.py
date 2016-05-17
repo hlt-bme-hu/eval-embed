@@ -5,6 +5,7 @@
 
 from argparse import ArgumentParser
 import re
+import sys
 
 import numpy as np
 
@@ -31,7 +32,15 @@ def parse_arguments():
 if __name__ == '__main__':
     instream, float_type = parse_arguments()
 
+    diffs = []
     for line in instream:
         fields = line.split()
-        word, vector = fields[0], [float_type(s) for s in fields[1:]]
-        print '{} {}'.format(word, ' '.join(map(str, vector)))
+        word, vector = fields[0], np.array([s for s in fields[1:]],
+                                           dtype=np.float_)
+        down_vector = np.array(vector, dtype=float_type)
+        diffs.append(np.linalg.norm(vector - down_vector))
+        print '{} {}'.format(word, ' '.join(map(str, down_vector)))
+    diffs = np.array(diffs, dtype=np.float_)
+    print >>sys.stderr, 'Euclidean distance to the original:'
+    print >>sys.stderr, '  - mean:', np.mean(diffs)
+    print >>sys.stderr, '  - std:', np.std(diffs)
