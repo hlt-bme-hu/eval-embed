@@ -7,8 +7,7 @@ import itertools
 import struct
 from multiprocessing import Process, Pipe
 import argparse
-
-# TODO prompt, tab completion, history
+import readline
 
 def renormalize(X):
     return X / (numpy.linalg.norm(X, axis=1)[:, None])
@@ -40,6 +39,9 @@ def compute_eucl(C, X, Y):
     TODO optimize this! It is ridiculous!
     """
     return scipy.spatial.distance.cdist(C.dot(X), Y.transpose())
+
+def compute_eucl_norm(C, X, Y):
+    return compute_eucl(C, X, Y)
 
 def compute_eucl_mul(C, X, Y):
     return C.dot(numpy.log(scipy.spatial.distance.cdist(X, Y.transpose())))
@@ -129,6 +131,15 @@ def word2vec_binary(vectors_fn, vocab_fn="", fmt=numpy.float32):
 """
 """
 
+def get_stdin():
+    """
+    Get data from stdin, if any
+    """
+    if not sys.stdin.isatty():
+        for line in sys.stdin:
+            yield line
+    return
+
 def process_questions(C, words, all_words, n):
     scores = dist_function[0](C[:, all_words], W[all_words, :], W2)
     worst = -dist_function[1]*numpy.Inf
@@ -151,34 +162,52 @@ def input_process(input_queue_recv, output_queue_send):
     while len(X) == 3:
         C, words, word_set = X
         answers, small_scores = process_questions(C, words, word_set, args.n_best)
-        output_queue_send.send((answers, small_scores))
+        output_queue_send.send((C if args.log_level > 0 else None, 
+                                answers, small_scores))
         X = input_queue_recv.recv()
     output_queue_send.send((None,))
     output_queue_send.close()
     
 def output_process(output_queue_recv):
     X = output_queue_recv.recv()
-    while len(X) == 2:
-        answers, small_scores = X
-        if small_scores is not None:
-            for answer, score in zip(answers, small_scores):
+    while len(X) == 3:
+        coeffs, answers, small_scores = X
+        n = len(answers)
+        for i in range(n):
+            if coeffs is not None:
+                coeffs_text = ["%g * %s" % (c, index2word[w]) \
+                            for w,c in zip(*scipy.sparse.find(coeffs[i])[1:])]
+                print >>sys.stderr, args.answer_tab.join(coeffs_text)
+            if small_scores is not None:
+                score_text = [(args.score_format % s) for s in small_scores[i]]
                 print args.answer_tab.join(
-                            index2word[a] + (args.score_format % s)
-                                for a, s in zip(answer, score)
-                            )
-        else:
-            for a in answers:
-                print args.answer_tab.join(index2word[w] for w in a)
+                                index2word[a] + s
+                                    for a, s in zip(answers[i], score_text)
+                                )
+            else:
+                print args.answer_tab.join(index2word[w] for w in answers[i])
+
         X = output_queue_recv.recv()
 
+def stdin_reader():
+    for line in sys.stdin:
+        yield line.strip()
+
+def prompt_reader():
+    try:
+        while True:
+            yield raw_input('')
+    except EOFError:
+        pass
+
 if __name__ == "__main__":
-    regex_str_ = "([+-]?(\d*(\.\d+)?))\s*([^-+\s]+)"
+    regex_str_ = "([+-]?(\d*(\.\d+)?))\s*(\S+)\s*"
     split_regex = re.compile(regex_str_)
     
     compute_distance_table = {x[0]: ((eval("compute_" + x[0]),) + x[1:]) for x in [
             # function, similarity or distance, requires normalization
             ("cos", 1, True), ("cos_r", 1, True),
-            ("eucl", -1, False), ("eucl_mul", -1, False),
+            ("eucl", -1, False), ("eucl_mul", -1, False), ("eucl_norm", -1, True),
             ("cos_mul", 1, True), ("cos_mul0", 1, True), ("cos_mul1", 1, True),
             ("angle", -1, True), ("arccos", -1, True)]}
 
@@ -240,7 +269,7 @@ if __name__ == "__main__":
                     "and answered together in order to utilize vectorization")
     
     parser.add_argument('-f', '--format', dest="score_format", type=str,
-                    default=" (%.3f)", metavar="format",
+                    default=" (%.3g)", metavar="format",
                     help="the format of the scores (relevance values) after the answers")
     
     parser.add_argument('-a', '--answer', dest="answer_tab", type=str,
@@ -302,12 +331,21 @@ if __name__ == "__main__":
         W = W.dot(T)
         
     if dist_function[2]:
+        # this renormalized W and W2 if they point to the same object
         renormalize_inplace(W2)
     
-    # this duplicates the memory usage, but the metric computation is faster
+    # this duplicates the memory usage, but the metric computation is slightly faster
     # W and W2.transpose() are both stored, even if W==W2
     W2 = W2.transpose()
-    
+
+    if sys.stdin.isatty():
+        if args.log_level > 0:
+            print >>sys.stderr, "parser ready"
+        generator = prompt_reader()
+        args.batch_size = 1
+    else:
+        generator = stdin_reader()
+
     C = lil_matrix((args.batch_size, W.shape[0]), dtype=W.dtype)
     batch_index = 0
     words = []
@@ -319,11 +357,8 @@ if __name__ == "__main__":
     p_out = Process(target=output_process, args=(output_queue_recv,))
     p.start()
     p_out.start()
-    
-    if args.log_level > 0:
-        print >>sys.stderr, "parser ready"
-    
-    for line in sys.stdin:
+
+    for line in generator:
         words.append([])
         this_words = words[-1]
         
@@ -334,10 +369,10 @@ if __name__ == "__main__":
                 this_words.append(word_id)
                 word_set.add(word_id)
                 C[batch_index, this_words[-1]] += coeff
-                if args.log_level > 0:
-                    print >>sys.stderr, coeff, "*", term[-1] + "\t",
-        if args.log_level > 0:
-            print >>sys.stderr
+                # if args.log_level > 0:
+                    # print >>sys.stderr, coeff, "*", term[-1] + args.answer_tab,
+        # if args.log_level > 0:
+            # print >>sys.stderr
         batch_index += 1
         
         if batch_index >= args.batch_size:

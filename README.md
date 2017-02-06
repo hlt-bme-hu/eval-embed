@@ -21,14 +21,15 @@ For GloVe binary vectors also the corresponding vocabulary should be provided. F
 The script reads _questions_ from stdin and answers them, line by line.
 The answers are written to stdout, additional debug info to stderr.
 A question can be any linear combination of input terms, such as:
-* king-man+woman
+* king -man +woman
 * frog
-* chinese+river
+* chinese + river
 
 ###Possible evaluation metrics
 * `cos`: standard cosine similarity
 * `cos_r`: the answers are the same as with cosine similarity, but the true similarity of the outcomes is shown. If you do not care the similarity scores, just the answers, then you can use plain `cos` because it is slightly faster.
 * `eucl`: standard Euclidean metric
+* `eucl_norm`: Euclidean metric but vectors are normalized first. This should be the same as `cos` or `cos_r`
 * `cos_mul`: the so called cos-mul metric, used in analogy tasks
 * `cos_mul0`: per default, cos-mul operates on (1+cos) since the cos similarity varies from -1 ot 1. But with mul0, positive vectors are assumed.
 * `arccos`: arc length distance on the unit sphere
