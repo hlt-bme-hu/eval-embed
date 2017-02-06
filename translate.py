@@ -5,7 +5,8 @@ from itertools import chain
 import argparse
 
 def renormalize(M):
-    return M / numpy.linalg.norm(M, axis=1)[:, None]
+    M /= numpy.linalg.norm(M, axis=1)[:, None]
+    return
 
 def renormalize_vector(v):
     return v / numpy.linalg.norm(v)
@@ -44,6 +45,11 @@ if __name__ == "__main__":
                                 help="number of examples shown")
     parser.add_argument("--verbose", help="writes translation examples to stderr",
                     action="store_true")
+    parser.add_argument("--fit", dest="fit", type=str, default="lin",
+                    help="seeks for linear or orthogonal transformation",
+                    choices=['lin', 'ortho'])
+    parser.add_argument("--normalize", default=False, action="store_true",
+                    help="normalizes embedding before fitting the translation matrix")
     args = parser.parse_args()
     
     seed_list = [tuple(line.strip().split()) for line in open(args.seed_dict, "r")]
@@ -80,12 +86,21 @@ if __name__ == "__main__":
         M1 = W1[lang1_indices, :]
         M2 = W2[lang2_indices, :]
         
-        T = numpy.linalg.lstsq(M1, M2)[0]
+        if args.normalize:
+            renormalize(M1)
+            renormalize(M2)
+        
+        if args.fit == "lin":
+            T = numpy.linalg.lstsq(M1, M2)[0]
+        else:
+            M=M1.transpose().dot(M2)
+            U, s, V = numpy.linalg.svd(M, full_matrices=True)
+            T=U.dot(V)
         numpy.savetxt(sys.stdout, T)
     else:
         T = numpy.loadtxt(sys.stdin)
         
-        W2 = renormalize(W2)
+        renormalize(W2)
         
         seed_dict = defaultdict(set)
         for source, target in seed_list:
