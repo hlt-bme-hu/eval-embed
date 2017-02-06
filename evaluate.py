@@ -175,7 +175,7 @@ def output_process(output_queue_recv):
         n = len(answers)
         for i in range(n):
             if coeffs is not None:
-                coeffs_text = ["%g * %s" % (c, index2word[w]) \
+                coeffs_text = ["%g * %s" % (c, index2word1[w]) \
                             for w,c in zip(*scipy.sparse.find(coeffs[i])[1:])]
                 print >>sys.stderr, args.answer_tab.join(coeffs_text)
             if small_scores is not None:
@@ -186,19 +186,21 @@ def output_process(output_queue_recv):
                                 )
             else:
                 print args.answer_tab.join(index2word[w] for w in answers[i])
-
         X = output_queue_recv.recv()
 
 def stdin_reader():
     for line in sys.stdin:
         yield line.strip()
-
 def prompt_reader():
     try:
         while True:
             yield raw_input('')
     except EOFError:
         pass
+
+class CustomFormatter(argparse.RawDescriptionHelpFormatter,
+                        argparse.ArgumentDefaultsHelpFormatter):
+    void=1
 
 if __name__ == "__main__":
     regex_str_ = "([+-]?(\d*(\.\d+)?))\s*(\S+)\s*"
@@ -222,16 +224,16 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(
         #formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=CustomFormatter,
         description=("Script for evaluating analogy tasks on word embedding vectors.\n"
             "Author: Gabor Borbely, borbely@math.bme.hu\n\n"
             "KING - MAN + WOMAN = QUEEN\n\n"
             "Reads question from stdin and writes answers to stdout, debug info to stderr.\n"
             "The questions can be asked in the following manner (one question per line):\n"
             "a single word for similarity: \"frog\",\n"
-            "analogy as linear combination: \"king-man+woman\",\n"
+            "analogy as linear combination: \"king - man + woman\",\n"
             "compound: \"china+river\" or \"china river\",\n"
-            "any linear combinations: \"1.0einstein+0.5cat-0.1relativity\".\n"
+            "any linear combinations: \"1.0einstein +0.5cat -0.1relativity\".\n"
             "the linear combinations are parsed according to the following regex:\n") + \
             regex_str_
         )
@@ -255,11 +257,11 @@ if __name__ == "__main__":
     
     parser.add_argument('-d', '--distance', dest="distance_type", type=str,
                     default="cos_r", metavar="function",
-                    help=" ".join(compute_distance_table.keys()))
+                    help=", ".join(compute_distance_table.keys()))
     
     parser.add_argument('-t', '--type', dest="input_type", type=str,
                     default="glove_binary", metavar="function",
-                    help=" ".join(input_types.keys()))
+                    help=", ".join(input_types.keys()))
     parser.add_argument('-t2', '--type2', dest="input_type2", type=str,
                     default="", metavar="function")
 
@@ -313,6 +315,7 @@ if __name__ == "__main__":
         W2, word2index2 = W, word2index
     
     index2word = {v: k for k, v in word2index2.iteritems()}
+    index2word1 = {v: k for k, v in word2index.iteritems()}
     
     if len(index2word) != len(word2index2):
         print >>sys.stderr, "You have multiple indices in word2index2!"
