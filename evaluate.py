@@ -226,8 +226,16 @@ if __name__ == "__main__":
         #formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         formatter_class=CustomFormatter,
         description=("Script for evaluating analogy tasks on word embedding vectors.\n"
-            "Author: Gabor Borbely, borbely@math.bme.hu\n\n"
-            "KING - MAN + WOMAN = QUEEN\n\n"
+            "Author: Gabor Borbely, borbely@math.bme.hu\n"
+            "      __________________ _  \n"
+            "     /                  / \ \n"
+            "    { king -man +woman {  | \n"
+            "    }                  }_/  \n"
+            "    {         =        {    \n"
+            "   _}                  {    \n"
+            "  /@{       QUEEN      {    \n"
+            " |  }                  }    \n"
+            " \_/__________________/     \n\n"
             "Reads question from stdin and writes answers to stdout, debug info to stderr.\n"
             "The questions can be asked in the following manner (one question per line):\n"
             "a single word for similarity: \"frog\",\n"
@@ -337,7 +345,7 @@ if __name__ == "__main__":
         # this renormalized W and W2 if they point to the same object
         renormalize_inplace(W2)
     
-    # this duplicates the memory usage, but the metric computation is slightly faster
+    # this duplicates the memory usage, but the cos similarity is slightly faster
     # W and W2.transpose() are both stored, even if W==W2
     W2 = W2.transpose()
 
