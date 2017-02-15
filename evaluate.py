@@ -140,11 +140,11 @@ def get_stdin():
             yield line
     return
 
-def process_questions(C, words, all_words, n):
+def process_questions(C, all_words, n):
     scores = dist_function[0](C[:, all_words], W[all_words, :], W2)
     worst = -dist_function[1]*numpy.Inf
-    for k in xrange(len(words)):
-        scores[k, words[k]] = worst
+    for i in range(C.shape[0]):
+        scores[i, C[i, :].nonzero()[1]] = worst
     if dist_function[1] > 0:
         hits = scores.argpartition(-n, axis=1)[:, -n:]
         answers = [sorted(hits[i], key=lambda hit: scores[i, hit], reverse=True) for i in range(len(hits))]
@@ -159,9 +159,9 @@ def process_questions(C, words, all_words, n):
 
 def input_process(input_queue_recv, output_queue_send):
     X = input_queue_recv.recv()
-    while len(X) == 3:
-        C, words, word_set = X
-        answers, small_scores = process_questions(C, words, word_set, args.n_best)
+    while len(X) == 2:
+        C, word_set = X
+        answers, small_scores = process_questions(C, word_set, args.n_best)
         output_queue_send.send((C if args.log_level > 0 else None, 
                                 answers, small_scores))
         X = input_queue_recv.recv()
@@ -342,7 +342,7 @@ if __name__ == "__main__":
         W = W.dot(T)
         
     if dist_function[2]:
-        # this renormalized W and W2 if they point to the same object
+        # this renormalizes W and W2 if they point to the same object
         renormalize_inplace(W2)
     
     # this duplicates the memory usage, but the cos similarity is slightly faster
@@ -387,21 +387,14 @@ if __name__ == "__main__":
         batch_index += 1
         
         if batch_index >= args.batch_size:
-            input_queue_send.send((
-                C[:batch_index, :].tocsr(),
-                words,
-                list(word_set)))
-            
+            input_queue_send.send((C[:batch_index, :].tocsr(), list(word_set)))
             C = lil_matrix((args.batch_size, W.shape[0]), dtype=W.dtype)
             batch_index = 0
             words = []
             word_set = set()
 
     if batch_index > 0:
-        input_queue_send.send((
-            C[:batch_index, :].tocsr(),
-            words,
-            list(word_set)))
+        input_queue_send.send((C[:batch_index, :].tocsr(), list(word_set)))
     
     input_queue_send.send((None,))
     input_queue_send.close()
