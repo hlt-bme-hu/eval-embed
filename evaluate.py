@@ -1,8 +1,7 @@
 import sys
 import numpy
 import re
-from scipy.sparse import lil_matrix, csr_matrix
-import scipy.spatial.distance
+import scipy.sparse
 import itertools
 import struct
 from multiprocessing import Process, Pipe
@@ -34,12 +33,19 @@ def compute_cos_mul1(C, X, Y):
 def compute_cos_mul0(C, X, Y):
     return C.dot(numpy.log(X.dot(Y)))
 
-def compute_eucl(C, X, Y):
+def euclidean_distances(X, Y):
     """
-    TODO optimize this! It is ridiculous!
+    http://stackoverflow.com/questions/6430091/efficient-distance-calculation-between-n-points-and-a-reference-in-numpy-scipy
+    http://scikit-learn.org/stable/modules/generated/sklearn.metrics.pairwise.euclidean_distances.html#sklearn.metrics.pairwise.euclidean_distances
     """
-    return scipy.spatial.distance.cdist(C.dot(X), Y.transpose())
+    return (X**2).sum(axis=1)[:, None] - 2 * X.dot(Y) + W_norms[None, :]
 
+def compute_eucl(C, X, Y):
+    return euclidean_distances(C.dot(X), Y)
+
+def compute_eucl_r(C, X, Y):
+    return numpy.sqrt(compute_eucl(C, X, Y))
+    
 def compute_eucl_norm(C, X, Y):
     return compute_eucl(C, X, Y)
 
@@ -200,7 +206,7 @@ def prompt_reader():
 
 class CustomFormatter(argparse.RawDescriptionHelpFormatter,
                         argparse.ArgumentDefaultsHelpFormatter):
-    void=1
+    pass
 
 if __name__ == "__main__":
     regex_str_ = "([+-]?(\d*(\.\d+)?))\s*(\S+)\s*"
@@ -210,17 +216,16 @@ if __name__ == "__main__":
             # function, similarity or distance, requires normalization
             ("cos", 1, True), ("cos_r", 1, True),
             ("eucl", -1, False), ("eucl_mul", -1, False), ("eucl_norm", -1, True),
+            ("eucl_r", -1, False),
             ("cos_mul", 1, True), ("cos_mul0", 1, True), ("cos_mul1", 1, True),
             ("angle", -1, True), ("arccos", -1, True)]}
 
     input_types = {x: eval(x) for x in [
-            "glove_binary",
+            "glove_binary", "glove_text",
             "glove_binary_bias",
             "glove_binary_context",
             "glove_binary_context_bias",
-            "glove_text",
-            "word2vec_text",
-            "word2vec_binary"]}
+            "word2vec_text", "word2vec_binary"]}
     
     parser = argparse.ArgumentParser(
         #formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -340,10 +345,11 @@ if __name__ == "__main__":
             print >>sys.stderr, "Transformation matrix dimension mismatch:", T.shape
             exit(1)
         W = W.dot(T)
-        
     if dist_function[2]:
         # this renormalizes W and W2 if they point to the same object
         renormalize_inplace(W2)
+    
+    W_norms = (W2**2).sum(axis=1)
     
     # this duplicates the memory usage, but the cos similarity is slightly faster
     # W and W2.transpose() are both stored, even if W==W2
@@ -357,7 +363,7 @@ if __name__ == "__main__":
     else:
         generator = stdin_reader()
 
-    C = lil_matrix((args.batch_size, W.shape[0]), dtype=W.dtype)
+    C = scipy.sparse.lil_matrix((args.batch_size, W.shape[0]), dtype=W.dtype)
     batch_index = 0
     words = []
     word_set = set()
@@ -388,11 +394,12 @@ if __name__ == "__main__":
         
         if batch_index >= args.batch_size:
             input_queue_send.send((C[:batch_index, :].tocsr(), list(word_set)))
-            C = lil_matrix((args.batch_size, W.shape[0]), dtype=W.dtype)
+            C = scipy.sparse.lil_matrix((args.batch_size, W.shape[0]), dtype=W.dtype)
             batch_index = 0
             words = []
             word_set = set()
 
+    # left-overs
     if batch_index > 0:
         input_queue_send.send((C[:batch_index, :].tocsr(), list(word_set)))
     

@@ -18,6 +18,8 @@ then
 fi
 questions=`cat $ANALOGY_FILE | wc -l`
 
+ARGS=("$@")
+
 cat $ANALOGY_FILE | python $DIR/evaluate.py -m $MODEL_FILE \
--t $MODEL_TYPE -v $VOCAB_FILE -l 0 -n 1 -d cos -b 100 | \
+-t $MODEL_TYPE -v $VOCAB_FILE -l 0 -n 1 -d cos -b 100 "${ARGS[@]:3}" | \
 paste -d' ' $ANALOGY_FILE.answers - | awk '$1 == $2 { print $1}' | wc -l
