@@ -38,13 +38,16 @@ def euclidean_distances(X, Y):
     http://stackoverflow.com/questions/6430091/efficient-distance-calculation-between-n-points-and-a-reference-in-numpy-scipy
     http://scikit-learn.org/stable/modules/generated/sklearn.metrics.pairwise.euclidean_distances.html#sklearn.metrics.pairwise.euclidean_distances
     """
-    return (X**2).sum(axis=1)[:, None] - 2 * X.dot(Y) + W_norms[None, :]
+    return W_norms[None, :] - 2 * X.dot(Y)
+
+def euclidean_distances_r(X, Y):
+    return numpy.sqrt((X**2).sum(axis=1)[:, None] - 2 * X.dot(Y) + W_norms[None, :])
 
 def compute_eucl(C, X, Y):
     return euclidean_distances(C.dot(X), Y)
-
+    
 def compute_eucl_r(C, X, Y):
-    return numpy.sqrt(compute_eucl(C, X, Y))
+    return euclidean_distances_r(C.dot(X), Y)
     
 def compute_eucl_norm(C, X, Y):
     return compute_eucl(C, X, Y)
