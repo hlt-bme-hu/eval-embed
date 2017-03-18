@@ -3,10 +3,9 @@ import numpy
 import re
 import scipy.sparse
 import itertools
-import struct
 from multiprocessing import Process, Pipe
 import argparse
-import readline
+from convert import input_types
 
 def renormalize(X):
     return X / (numpy.linalg.norm(X, axis=1)[:, None])
@@ -24,6 +23,9 @@ def compute_cos(C, X, Y):
 def compute_cos_r(C, X, Y):
     return renormalize(C.dot(X)).dot(Y)
 
+def compute_proj(C, X, Y):
+    return C.dot(numpy.abs(X.dot(Y)))
+    
 def compute_cos_mul(C, X, Y):
     return C.dot(numpy.log1p(X.dot(Y)))
     
@@ -60,85 +62,6 @@ def compute_arccos(C, X, Y):
 
 def compute_angle(C, X, Y):
     return (180.0/numpy.pi)*numpy.arccos(compute_cos_r(C, X, Y))
-
-def read_vocab(vocab_fn):
-    word2index = {}
-    with open(vocab_fn, "r") as f:
-        for i, line in enumerate(f):
-            word = line.strip().split()[0]
-            word2index[word] = i
-    return word2index
-
-"""
-define various formats here
-don't forget to fill the input_types dictionary
-"""
-def glove_binary(vectors_fn, vocab_fn, fmt=float):
-    word2index = read_vocab(vocab_fn)
-    W = numpy.fromfile(vectors_fn, dtype=fmt).reshape((len(word2index), -1))
-    return W, word2index
-
-def glove_binary_bias(vectors_fn, vocab_fn, fmt=float):
-    word2index = read_vocab(vocab_fn)
-    W = numpy.fromfile(vectors_fn, dtype=fmt)
-    W = W.reshape((len(word2index), -1))[:, :-1]
-    return W, word2index
-
-def glove_binary_context(vectors_fn, vocab_fn, fmt=float):
-    word2index = read_vocab(vocab_fn)
-    V = len(word2index)
-    W = numpy.fromfile(vectors_fn, dtype=fmt).reshape((2*V, -1))
-    W = W[:V, :] + W[V:, :]
-    return W, word2index
-
-def glove_binary_context_bias(vectors_fn, vocab_fn, fmt=float):
-    word2index = read_vocab(vocab_fn)
-    V = len(word2index)
-    W = numpy.fromfile(vectors_fn, dtype=fmt).reshape((2*V, -1))
-    W = W[:V, :-1] + W[V:, :-1]
-    return W, word2index
-
-def glove_text(vectors_fn, vocab_fn="", fmt=float):
-    W = []
-    word2index = {}
-    for i, line in enumerate(open(vectors_fn, "r")):
-        line = line.strip("\r").strip("\n").split(' ')
-        word2index[line[0]] = i
-        W.append(map(fmt, line[1:]))
-    W = numpy.array(W)
-    return W, word2index
-
-def word2vec_text(vectors_fn, vocab_fn="", fmt=float):
-    word2index = {}
-    W = []
-    f = open(vectors_fn, "r")
-    V, dim = map(int, f.readline().strip().split(' '))[:2]
-    W = numpy.zeros((V, dim), dtype=fmt)
-    for i, line in enumerate(f):
-        line = line.strip("\r").strip("\n").split(' ')
-        word2index[line[0]] = i
-        W[i, :] = map(fmt, line[1:])
-    return W, word2index
-
-def word2vec_binary(vectors_fn, vocab_fn="", fmt=numpy.float32):
-    word2index = {}
-    f = open(vectors_fn, "rb")
-    V, dim = map(int, f.readline().strip().split(' '))
-    struct_format = struct.Struct(("d" if fmt == float else "f")*dim)
-    W = numpy.zeros((V, dim), dtype=fmt)
-    for i in xrange(V):
-        c = f.read(1)
-        word = ''
-        while c != ' ':
-            word += c
-            c = f.read(1)
-        word = word.strip()
-        word2index[word] = i
-        W[i, :] = struct_format.unpack(f.read(struct_format.size))
-    return W, word2index
-
-"""
-"""
 
 def get_stdin():
     """
@@ -217,21 +140,13 @@ if __name__ == "__main__":
     
     compute_distance_table = {x[0]: ((eval("compute_" + x[0]),) + x[1:]) for x in [
             # function, similarity or distance, requires normalization
-            ("cos", 1, True), ("cos_r", 1, True),
+            ("cos", 1, True), ("cos_r", 1, True), ("proj", 1, True),
             ("eucl", -1, False), ("eucl_mul", -1, False), ("eucl_norm", -1, True),
             ("eucl_r", -1, False),
             ("cos_mul", 1, True), ("cos_mul0", 1, True), ("cos_mul1", 1, True),
             ("angle", -1, True), ("arccos", -1, True)]}
-
-    input_types = {x: eval(x) for x in [
-            "glove_binary", "glove_text",
-            "glove_binary_bias",
-            "glove_binary_context",
-            "glove_binary_context_bias",
-            "word2vec_text", "word2vec_binary"]}
     
     parser = argparse.ArgumentParser(
-        #formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         formatter_class=CustomFormatter,
         description=("Script for evaluating analogy tasks on word embedding vectors.\n"
             "Author: Gabor Borbely, borbely@math.bme.hu\n"
@@ -248,7 +163,7 @@ if __name__ == "__main__":
             "The questions can be asked in the following manner (one question per line):\n"
             "a single word for similarity: \"frog\",\n"
             "analogy as linear combination: \"king - man + woman\",\n"
-            "compound: \"china+river\" or \"china river\",\n"
+            "compound: \"china +river\" or \"china river\",\n"
             "any linear combinations: \"1.0einstein +0.5cat -0.1relativity\".\n"
             "the linear combinations are parsed according to the following regex:\n") + \
             regex_str_
@@ -316,18 +231,15 @@ if __name__ == "__main__":
     input_function = input_types[args.input_type]
     input_function2 = input_function if args.input_type2 == "" else input_types[args.input_type2]
     
-    if args.format is "None":
-        # the specific input format tells which precision to use
-        W, word2index = input_function(args.model_name, args.vocab_name)
-        if args.model_name2 != "":
-            W2, word2index2 = input_function2(args.model_name2, args.vocab_name2)
+    params1 = [args.model_name, args.vocab_name]
+    params2 = [args.model_name2, args.vocab_name2]
+    if args.format != "None":
+        params1.append(eval(args.format))
+        params2.append(eval(args.format))
+    W, word2index = input_function(*params1)
+    if args.model_name2 != "":
+        W2, word2index2 = input_function2(*params2)
     else:
-        W, word2index = input_function(args.model_name, args.vocab_name,
-                                        eval(args.format))
-        if args.model_name2 != "":
-            W2, word2index2 = input_function2(args.model_name2, args.vocab_name2,
-                                        eval(args.format))
-    if args.model_name2 == "":
         W2, word2index2 = W, word2index
     
     index2word = {v: k for k, v in word2index2.iteritems()}
@@ -389,10 +301,6 @@ if __name__ == "__main__":
                 this_words.append(word_id)
                 word_set.add(word_id)
                 C[batch_index, this_words[-1]] += coeff
-                # if args.log_level > 0:
-                    # print >>sys.stderr, coeff, "*", term[-1] + args.answer_tab,
-        # if args.log_level > 0:
-            # print >>sys.stderr
         batch_index += 1
         
         if batch_index >= args.batch_size:
