@@ -6,6 +6,7 @@ import itertools
 from multiprocessing import Process, Pipe
 import argparse
 from convert import input_types
+import readline
 
 def renormalize(X):
     return X / (numpy.linalg.norm(X, axis=1)[:, None])
