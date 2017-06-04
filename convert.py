@@ -45,9 +45,15 @@ def read_glove_binary_context_bias(vectors_fn, vocab_fn, fmt=float):
 
 def read_glove_text(vectors_fn, vocab_fn="", fmt="float64"):
     f = open(vectors_fn, "r") if type(vectors_fn) is str else vectors_fn
-    W = numpy.loadtxt(f, dtype=str, comments=None)
-    word2index = {w: i for i, w in enumerate(W[:, 0])}
-    return W[:, 1:].astype(fmt), word2index
+    file_pos = f.tell()
+    V = numpy.loadtxt(f, dtype=str, comments=None, usecols=(0,))
+    word2index = {w: i for i, w in enumerate(V)}
+    f.seek(file_pos)
+    W = numpy.loadtxt(f, dtype=fmt, comments=None,
+                        converters = {0: lambda x: 0.0})
+    if len(word2index) != len(W):
+        print >>sys.stderr, "WARNING:", len(word2index), "disjoint words in embedding of length", len(W)
+    return W[:, 1:], word2index
 
 def write_glove_text(W, word2index, vectors_fn, vocab_fn="", fmt="float64"):
     index2word = {i: w for w, i in word2index.items()}
