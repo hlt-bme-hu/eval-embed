@@ -3,7 +3,9 @@ import numpy
 import re
 import scipy.sparse
 import itertools
-from multiprocessing import Process, Pipe
+from multiprocessing import Pipe
+# from multiprocessing import Process as Worker
+from threading import Thread as Worker
 import argparse
 from convert import input_types
 import readline
@@ -286,8 +288,8 @@ if __name__ == "__main__":
 
     input_queue_recv, input_queue_send = Pipe()
     output_queue_recv, output_queue_send = Pipe()
-    p = Process(target=input_process, args=(input_queue_recv, output_queue_send))
-    p_out = Process(target=output_process, args=(output_queue_recv,))
+    p = Worker(target=input_process, args=(input_queue_recv, output_queue_send))
+    p_out = Worker(target=output_process, args=(output_queue_recv,))
     p.start()
     p_out.start()
 
