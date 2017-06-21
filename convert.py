@@ -3,6 +3,8 @@ import argparse
 import sys
 import struct
 
+from scipy.sparse import csr_matrix
+
 class EmbeddingException(Exception):
     pass
 
@@ -14,10 +16,27 @@ def read_vocab(vocab_fn):
             word2index[word] = i
     return word2index
 
+
 """
 define various formats here
 don't forget to fill the input_types dictionary
 """
+def read_dense_npz(vectors_fn, vocab_fn="", fmt=float):
+    npz = numpy.load(vectors_fn)
+    words = npz['words']
+    W = npz['vectors']
+    word2index = {w: i for i, w in enumerate(words)}
+    return W, word2index
+
+def read_csr_npz(vectors_fn, vocab_fn="", fmt=float):
+    npz = numpy.load(vectors_fn)
+    words = npz['words']
+    W = csr_matrix((npz['vectors_data'], npz['vectors_indices'],
+                    npz['vectors_indptr']), shape=npz['vectors_shape'])
+    W = W.todense().A
+    word2index = {w: i for i, w in enumerate(words)}
+    return W, word2index
+
 def read_glove_binary(vectors_fn, vocab_fn, fmt=float):
     word2index = read_vocab(vocab_fn)
     W = numpy.fromfile(vectors_fn, dtype=fmt).reshape((len(word2index), -1))
@@ -50,9 +69,10 @@ def read_glove_text(vectors_fn, vocab_fn="", fmt="float64"):
     word2index = {w: i for i, w in enumerate(V)}
     f.seek(file_pos)
     W = numpy.loadtxt(f, dtype=fmt, comments=None,
-                        converters = {0: lambda x: 0.0})
+                      converters={0: lambda x: 0.0})
     if len(word2index) != len(W):
-        print >>sys.stderr, "WARNING:", len(word2index), "disjoint words in embedding of length", len(W)
+        print >>sys.stderr, "WARNING:", len(word2index),
+        print >>sys.stderr, "disjoint words in embedding of length", len(W)
     return W[:, 1:], word2index
 
 def write_glove_text(W, word2index, vectors_fn, vocab_fn="", fmt="float64"):
@@ -98,30 +118,32 @@ def read_word2vec_binary(vectors_fn, vocab_fn="", fmt="float32"):
         W[i, :] = struct_format.unpack(f.read(struct_format.size))
     return W, word2index
 
+
 """
 """
 
 input_types = {x: eval("read_" + x) for x in [
-        "glove_binary", "glove_text",
-        "glove_binary_bias",
-        "glove_binary_context",
-        "glove_binary_context_bias",
-        "word2vec_text", "word2vec_binary"]}
+    "glove_binary", "glove_text",
+    "glove_binary_bias",
+    "glove_binary_context",
+    "glove_binary_context_bias",
+    "word2vec_text", "word2vec_binary",
+    "csr_npz", "dense_npz"]}
 
 output_types = {x: eval("write_" + x) for x in [
-        "glove_text", "word2vec_text"]}
+    "glove_text", "word2vec_text"]}
 
 def main(args):
     print >>sys.stderr, "Reading ...",
     params = [args.model_from, args.vocab_from]
     if args.source_fmt != "None":
         params.append(args.source_fmt)
-    
+
     W, word2index = input_types[args.input_type](*params)
     print >>sys.stderr, "Done"
-    
+
     print >>sys.stderr, W.shape[0], W.shape[1]
-    print >>sys.stderr, "Writing ...", 
+    print >>sys.stderr, "Writing ...",
     params = [W, word2index, args.model_to, args.vocab_to]
     if args.target_fmt != "None":
         params.append(args.target_fmt)
@@ -129,36 +151,40 @@ def main(args):
     print >>sys.stderr, "Done"
     return 0
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-                    description="Converting between embedding formats",
-                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        description="Converting between embedding formats",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('-v1', '--vocab1', dest="vocab_from", type=str,
-                    default="vocab.txt", metavar="filename",
-                    help="vocabulary file name of source embedding")
+                        default="vocab.txt", metavar="filename",
+                        help="vocabulary file name of source embedding")
     parser.add_argument('-v2', '--vocab2', dest="vocab_to", type=str,
-                    default="vocab2.txt", metavar="filename",
-                    help="vocabulary file name of target embedding")
+                        default="vocab2.txt", metavar="filename",
+                        help="vocabulary file name of target embedding")
 
     parser.add_argument('-m1', '--model1', dest="model_from", type=str,
-                    default="vectors.txt", metavar="filename",
-                    help="model file name of source embedding")
+                        default="vectors.txt", metavar="filename",
+                        help="model file name of source embedding")
     parser.add_argument('-m2', '--model2', dest="model_to", type=str,
-                    default="vectors2.txt", metavar="filename",
-                    help="model file name of target embedding")
-    
+                        default="vectors2.txt", metavar="filename",
+                        help="model file name of target embedding")
+
     parser.add_argument('-t1', '--type1', dest="input_type", type=str,
-                    default="glove_binary", metavar="function",
-                    help="source format: " + ", ".join(sorted(input_types)))
+                        default="glove_binary", metavar="function",
+                        help="source format: " + ", ".join(
+                            sorted(input_types)))
     parser.add_argument('-t2', '--type2', dest="output_type", type=str,
-                    default="word2vec_text", metavar="function",
-                    help="target format: " + ", ".join(sorted(output_types)))
+                        default="word2vec_text", metavar="function",
+                        help="target format: " + ", ".join(
+                            sorted(output_types)))
 
     parser.add_argument('-f1', '--format1', dest="source_fmt", type=str,
                         default="None", metavar="precision",
-                        help="source floating point precision, " + \
-                             "for \"None\" it is defined by specific embedding format.",
+                        help="source floating point precision, " +
+                             "for \"None\" it is defined by specific " +
+                             "embedding format.",
                         choices=["None", "float32", "float64"])
     parser.add_argument('-f2', '--format2', dest="target_fmt", type=str,
                         default="None", metavar="precision",
