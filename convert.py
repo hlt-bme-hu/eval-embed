@@ -21,14 +21,14 @@ def read_vocab(vocab_fn):
 define various formats here
 don't forget to fill the input_types dictionary
 """
-def read_dense_npz(vectors_fn, vocab_fn="", fmt=float):
+def read_dense_npz(vectors_fn, vocab_fn="", fmt="float64"):
     npz = numpy.load(vectors_fn)
     words = npz['words']
     W = npz['vectors']
     word2index = {w: i for i, w in enumerate(words)}
     return W, word2index
 
-def read_csr_npz(vectors_fn, vocab_fn="", fmt=float):
+def read_csr_npz(vectors_fn, vocab_fn="", fmt="float64"):
     npz = numpy.load(vectors_fn)
     words = npz['words']
     W = csr_matrix((npz['vectors_data'], npz['vectors_indices'],
@@ -37,7 +37,7 @@ def read_csr_npz(vectors_fn, vocab_fn="", fmt=float):
     word2index = {w: i for i, w in enumerate(words)}
     return W, word2index
 
-def read_glove_binary(vectors_fn, vocab_fn, fmt=float):
+def read_glove_binary(vectors_fn, vocab_fn, fmt="float64"):
     word2index = read_vocab(vocab_fn)
     W = numpy.fromfile(vectors_fn, dtype=fmt).reshape((len(word2index), -1))
     return W, word2index
@@ -174,11 +174,14 @@ if __name__ == "__main__":
     parser.add_argument('-t1', '--type1', dest="input_type", type=str,
                         default="glove_binary", metavar="function",
                         help="source format: " + ", ".join(
-                            sorted(input_types)))
+                            sorted(input_types)),
+                        choices=sorted(input_types))
+
     parser.add_argument('-t2', '--type2', dest="output_type", type=str,
                         default="word2vec_text", metavar="function",
                         help="target format: " + ", ".join(
-                            sorted(output_types)))
+                            sorted(output_types)),
+                        choices=sorted(output_types))
 
     parser.add_argument('-f1', '--format1', dest="source_fmt", type=str,
                         default="None", metavar="precision",

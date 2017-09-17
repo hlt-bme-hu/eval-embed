@@ -191,13 +191,19 @@ if __name__ == "__main__":
     
     parser.add_argument('-d', '--distance', dest="distance_type", type=str,
                     default="cos_r", metavar="function",
-                    help=", ".join(compute_distance_table.keys()))
+                    help=", ".join(compute_distance_table.keys()),
+                    choices=compute_distance_table.keys())
     
     parser.add_argument('-t', '--type', dest="input_type", type=str,
                     default="glove_binary", metavar="function",
-                    help=", ".join(input_types.keys()))
+                    choices=sorted(input_types),
+                    help="source format: " + ", ".join(sorted(input_types)))
+    
     parser.add_argument('-t2', '--type2', dest="input_type2", type=str,
-                    default="", metavar="function")
+                    default="", metavar="function",
+                    help="format of the second embedding "
+                    "in case it differs from the first one",
+                    choices=[""] + input_types.keys())
 
     parser.add_argument('-b', '--batch', dest="batch_size", type=int,
                     default=100, metavar="uint",
@@ -219,10 +225,11 @@ if __name__ == "__main__":
                     "2: parse info and scores")
 
     parser.add_argument('-p', '--precision', dest="format", type=str,
-                    default="None", metavar="constructor",
+                    default="None", metavar="string",
                     help="the floating point precision, You can set this to " + \
-                    "float, numpy.float32, numpy.float64 or \"None\". " + \
-                    "None means that the specific input type defines it.")
+                    "float32, float6 or \"None\". " + \
+                    "None means that the specific input type defines it.",
+                    choices=["None", "float23", "float64"])
 
     parser.add_argument('-T', '--transform', dest="transform", type=str,
                     default="", metavar="filename",
@@ -237,8 +244,8 @@ if __name__ == "__main__":
     params1 = [args.model_name, args.vocab_name]
     params2 = [args.model_name2, args.vocab_name2]
     if args.format != "None":
-        params1.append(eval(args.format))
-        params2.append(eval(args.format))
+        params1.append(args.format)
+        params2.append(args.format)
     W, word2index = input_function(*params1)
     if args.model_name2 != "":
         W2, word2index2 = input_function2(*params2)
