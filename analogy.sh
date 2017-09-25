@@ -14,7 +14,7 @@ fi
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 if [[ -z "$ANALOGY_FILE" ]]
 then
-    ANALOGY_FILE=$DIR/data/google_analogy_tests
+    ANALOGY_FILE=$DIR/data/google_analogy_tests.lowercase
 fi
 questions=`cat "$ANALOGY_FILE" | wc -l`
 
